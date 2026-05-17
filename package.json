@@ -2,9 +2,9 @@
   "name": "ecoflow-ops-platform",
   "private": true,
   "engines": {
-  "node": "20.x",
-  "npm": "10.x"
-  }
+    "node": "20.x",
+    "npm": "10.x"
+  },
   "version": "1.13.0",
   "type": "module",
   "scripts": {
