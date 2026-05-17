@@ -1,7 +1,10 @@
 {
   "name": "ecoflow-ops-platform",
   "private": true,
-  "packageManager": "pnpm@9.15.4",
+  "engines": {
+  "node": "20.x",
+  "npm": "10.x"
+  }
   "version": "1.13.0",
   "type": "module",
   "scripts": {
