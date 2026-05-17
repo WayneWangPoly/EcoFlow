@@ -1,31 +1,28 @@
 {
   "name": "ecoflow-ops-platform",
-  "private": true,
-  "engines": {
-    "node": "20.x",
-    "npm": "10.x"
-  },
   "version": "1.13.0",
-  "type": "module",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "autoprefixer": "latest",
     "lucide-react": "latest",
+    "postcss": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "react-router-dom": "latest",
-    "typescript": "latest",
     "vite": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "autoprefixer": "latest",
-    "postcss": "latest",
-    "tailwindcss": "3.4.17"
+    "typescript": "latest"
   }
 }
