@@ -19,7 +19,6 @@
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
-    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@types/react": "latest",
