@@ -76,22 +76,17 @@ export async function scanSortingBarcode(orderId: string, barcodeValue: string) 
   return { ok: !error, source: 'supabase' as const, barcode, error };
 }
 
-function buildPackageCode(orderId: string, index: number, orderNumber?: string) {
-  const base = orderNumber ? orderNumber.replace(/[^A-Z0-9]/gi, '') : orderId;
-  return `PKG-${base}-${String(index).padStart(2, '0')}`;
-}
-
-export async function createPackages(orderId: string, packageCount: number, orderNumber?: string) {
+export async function createPackages(orderId: string, packageCount: number) {
   if (!hasSupabaseEnv || !supabaseClient) {
-    const packages = Array.from({ length: packageCount }, (_, i) => { const packageCode = buildPackageCode(orderId, i + 1, orderNumber); return { id: packageCode, packageCode, barcodeValue: packageCode }; });
+    const packages = Array.from({ length: packageCount }, (_, i) => ({ id: `PKG-${orderId}-${i + 1}`, packageCode: `PKG-${orderId}-${i + 1}` }));
     return { ok: true, source: 'mock' as const, packages };
   }
 
   const payload = Array.from({ length: packageCount }, (_, i) => ({
-    package_code: buildPackageCode(orderId, i + 1, orderNumber),
+    package_code: `PKG-${orderId}-${i + 1}`,
     order_id: orderId,
-    status: 'label_printed',
-    barcode_value: buildPackageCode(orderId, i + 1, orderNumber)
+    status: 'packed',
+    barcode_value: `PKGBC-${orderId}-${i + 1}`
   }));
   const { data, error } = await supabaseClient.from('packages').insert(payload).select('*');
   return { ok: !error, source: 'supabase' as const, packages: (data ?? []) as PackageRecord[], error };
@@ -114,32 +109,4 @@ export async function createPodRecord(input?: { deliveryStopId?: string; recipie
     .single();
 
   return { ok: !error, source: 'supabase' as const, record: data, error };
-}
-
-
-export async function uploadPodPhoto(stopId: string, file: File): Promise<{ url: string; source: 'supabase' | 'mock' }> {
-  if (!hasSupabaseEnv || !supabaseClient) {
-    return { url: `local-placeholder://pod/${stopId}/${encodeURIComponent(file.name)}`, source: 'mock' };
-  }
-
-  const path = `${stopId}/${Date.now()}-${file.name}`;
-  const uploaded = await supabaseClient.storage.from('pod-photos').upload(path, file, { upsert: true });
-  if (uploaded.error) {
-    return { url: `local-placeholder://pod/${stopId}/${encodeURIComponent(file.name)}`, source: 'mock' };
-  }
-  const { data } = supabaseClient.storage.from('pod-photos').getPublicUrl(path);
-  return { url: data.publicUrl, source: 'supabase' };
-}
-
-export async function completeDeliveryStopIfReady(stopId: string, orderId: string) {
-  if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const };
-
-  const pkgRes = await supabaseClient.from('packages').select('id,status').eq('order_id', orderId).neq('status', 'voided');
-  const podRes = await supabaseClient.from('pod_records').select('id').eq('delivery_stop_id', stopId).limit(1);
-  const allDelivered = (pkgRes.data ?? []).length > 0 && (pkgRes.data ?? []).every((p: any) => p.status === 'delivered');
-  const hasPod = (podRes.data ?? []).length > 0;
-  if (!allDelivered || !hasPod) return { ok: false, reason: 'not_ready', source: 'supabase' as const };
-
-  const { error } = await supabaseClient.from('delivery_stops').update({ status: 'delivered' }).eq('id', stopId);
-  return { ok: !error, source: 'supabase' as const, error };
 }

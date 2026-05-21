@@ -21,32 +21,3 @@ set
   can_mix_pack = excluded.can_mix_pack,
   setup_status = excluded.setup_status,
   updated_at = now();
-
-
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '19344062036170', 'carton' from public.skus where sku_code='JP-PBS-6X197-ARTBOX'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '9344062033639', 'sleeve' from public.skus where sku_code='JP-PBS-6X197-ARTBOX'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '19344062037160', 'carton' from public.skus where sku_code='JP-JUMBO-10MM'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '9344062034629', 'sleeve' from public.skus where sku_code='JP-JUMBO-10MM'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '07579531135548', 'carton' from public.skus where sku_code='CCSPW16-90'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '07579531136521', 'sleeve' from public.skus where sku_code='CCSPW16-90'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '07579531135517', 'carton' from public.skus where sku_code='CCSPW8-90'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
-insert into public.barcodes (sku_id, barcode_value, barcode_type)
-select id, '07579531136507', 'sleeve' from public.skus where sku_code='CCSPW8-90'
-on conflict (barcode_value) do update set sku_id=excluded.sku_id, barcode_type=excluded.barcode_type;
