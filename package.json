@@ -20,7 +20,10 @@
     "react-dom": "latest",
     "vite": "latest",
     "tailwindcss": "^3.4.17",
-    "react-router-dom": "^7.10.1"
+    "react-router-dom": "^7.10.1",
+    "@supabase/supabase-js": "^2.49.8",
+    "@zxing/browser": "^0.1.5",
+    "qrcode.react": "^4.2.0"
   },
   "devDependencies": {
     "@types/react": "latest",

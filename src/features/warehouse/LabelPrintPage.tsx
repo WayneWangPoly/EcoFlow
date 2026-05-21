@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Printer, RotateCcw, Ban } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, Pill, SectionTitle } from '../../components/ui';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function LabelPrintPage() {
   const { orderId } = useParams();
@@ -52,7 +53,7 @@ export default function LabelPrintPage() {
           </div>
           <div className="mt-4 grid grid-cols-[1fr_96px] gap-3">
             <div className="grid place-items-center border border-eco-ink p-2 text-center text-xs tracking-[0.35em]">||||||||||||<br />{pkg.barcodeValue}</div>
-            <div className="grid h-24 place-items-center border border-eco-ink text-center text-[10px] leading-3">QR<br />{pkg.packageCode.slice(-5)}</div>
+            <div className="grid h-24 place-items-center border border-eco-ink bg-white p-1"><QRCodeSVG value={pkg.qrPayload} size={80} /></div>
           </div>
           <div className="mt-3 text-xs text-eco-muted">Print count: {pkg.printCount ?? 1} · Last print: {pkg.lastPrintedAt ? new Date(pkg.lastPrintedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</div>
           {(pkg.reprintHistory?.length ?? 0) > 0 && <div className="mt-2 rounded-lg bg-eco-fog p-2 text-xs"><b>Reprints:</b> {pkg.reprintHistory?.map((r) => r.reason).join(' · ')}</div>}

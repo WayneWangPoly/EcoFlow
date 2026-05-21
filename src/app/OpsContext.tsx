@@ -435,6 +435,16 @@ function reducer(state: OpsState, action: Action): OpsState {
       }
       const remaining = line.requiredQuantity - line.sortedQuantity - (line.shortQuantity ?? 0);
       const addQuantity = scan.unitLevel === 'carton' && line.unit === 'sleeve' ? scan.quantityInBaseUnit : 1;
+      if (scan.unitLevel === 'carton' && line.unit === 'sleeve' && remaining < addQuantity) {
+        return {
+          ...state,
+          exceptions: addException(state, {
+            type: 'manual_review', severity: 'medium', relatedOrderId: task.orderId, relatedSkuId: scan.sku.id,
+            message: `Carton scan blocked for ${scan.sku.skuCode}: remaining ${remaining} sleeve(s) is less than carton size ${addQuantity}.`
+          }),
+          auditLogs: addAudit(state, 'warehouse', 'Carton split required before final sleeve count', 'sorting', task.id, { barcodeValue: action.barcodeValue, remaining, cartonSleeves: addQuantity, supervisorPinRequired: true })
+        };
+      }
       const appliedQuantity = Math.min(addQuantity, remaining);
       const nextLines = state.sortingLines.map((l) =>
         l.id === line.id
@@ -540,7 +550,7 @@ function reducer(state: OpsState, action: Action): OpsState {
           customerId: order.customerId,
           packageIndex,
           totalPackages: action.totalPackages,
-          labelText: `${packageIndex}/${action.totalPackages}`,
+          labelText: `Package ${packageIndex} of ${action.totalPackages}`,
           barcodeValue: code,
           qrPayload: JSON.stringify({ packageCode: code, orderId: order.id, orderNumber: order.orderNumber, packageIndex, totalPackages: action.totalPackages }),
           status: 'label_printed',

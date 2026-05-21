@@ -39,13 +39,19 @@ export default function OrdermentumImportPage() {
 
 
   const testScan = (code: string) => {
-    const result = helpers.barcodeToSku(code.trim());
-    setTestBarcode(code.trim());
-    if (!result.sku) {
-      setTestResult(`No SKU found for barcode ${code.trim()}. Add it in Settings > Products / SKUs.`);
+    const value = code.trim();
+    const result = helpers.barcodeToSku(value);
+    setTestBarcode(value);
+    if (result.sku) {
+      setTestResult(`${result.unitLevel === 'carton' ? 'Carton barcode' : 'Sleeve barcode'} matched: ${result.sku.skuCode} · ${result.sku.displayName}`);
       return;
     }
-    setTestResult(`${result.unitLevel === 'carton' ? 'Carton' : 'Sleeve'} barcode matched: ${result.sku.skuCode} · ${result.sku.displayName} · adds ${result.quantityInBaseUnit} ${result.sku.defaultPickUnit === 'carton' ? 'carton/base unit' : 'sleeve/base units'}`);
+    const pkg = state.packages.find((p) => p.barcodeValue === value || p.packageCode === value);
+    if (pkg) {
+      setTestResult(`Package label matched: ${pkg.labelText} for order ${pkg.orderId}`);
+      return;
+    }
+    setTestResult(`Unknown barcode: ${value}`);
   };
 
   return (
