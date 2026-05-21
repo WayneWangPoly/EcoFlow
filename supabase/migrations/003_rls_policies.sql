@@ -1,0 +1,36 @@
+alter table public.staff_accounts enable row level security;
+alter table public.skus enable row level security;
+alter table public.barcodes enable row level security;
+alter table public.warehouse_locations enable row level security;
+alter table public.orders enable row level security;
+alter table public.order_items enable row level security;
+alter table public.cart_waves enable row level security;
+alter table public.cart_slots enable row level security;
+alter table public.packages enable row level security;
+alter table public.delivery_runs enable row level security;
+alter table public.delivery_stops enable row level security;
+alter table public.scan_events enable row level security;
+alter table public.pod_records enable row level security;
+alter table public.audit_logs enable row level security;
+
+create policy "service_role_full_staff_accounts" on public.staff_accounts for all to service_role using (true) with check (true);
+create policy "service_role_full_skus" on public.skus for all to service_role using (true) with check (true);
+create policy "service_role_full_barcodes" on public.barcodes for all to service_role using (true) with check (true);
+create policy "service_role_full_warehouse_locations" on public.warehouse_locations for all to service_role using (true) with check (true);
+create policy "service_role_full_orders" on public.orders for all to service_role using (true) with check (true);
+create policy "service_role_full_order_items" on public.order_items for all to service_role using (true) with check (true);
+create policy "service_role_full_cart_waves" on public.cart_waves for all to service_role using (true) with check (true);
+create policy "service_role_full_cart_slots" on public.cart_slots for all to service_role using (true) with check (true);
+create policy "service_role_full_packages" on public.packages for all to service_role using (true) with check (true);
+create policy "service_role_full_delivery_runs" on public.delivery_runs for all to service_role using (true) with check (true);
+create policy "service_role_full_delivery_stops" on public.delivery_stops for all to service_role using (true) with check (true);
+create policy "service_role_full_scan_events" on public.scan_events for all to service_role using (true) with check (true);
+create policy "service_role_full_pod_records" on public.pod_records for all to service_role using (true) with check (true);
+create policy "service_role_full_audit_logs" on public.audit_logs for all to service_role using (true) with check (true);
+
+create policy "authenticated_read_skus" on public.skus for select to authenticated using (true);
+create policy "authenticated_read_locations" on public.warehouse_locations for select to authenticated using (true);
+create policy "authenticated_read_orders" on public.orders for select to authenticated using (true);
+create policy "authenticated_read_order_items" on public.order_items for select to authenticated using (true);
+create policy "authenticated_insert_scan_events" on public.scan_events for insert to authenticated with check (true);
+create policy "authenticated_insert_audit_logs" on public.audit_logs for insert to authenticated with check (true);
