@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { findBarcode, getSkus } from '../../services/pilotSupabaseService';
 import { AlertTriangle, CheckCircle2, PackageSearch, RefreshCcw, Settings, UploadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useOps } from '../../app/OpsContext';
@@ -38,12 +39,25 @@ export default function OrdermentumImportPage() {
   const sampleItems = sampleOrder ? state.orderItems.filter((i) => i.orderId === sampleOrder.id).slice(0, 5) : [];
 
 
-  const testScan = (code: string) => {
+  const testScan = async (code: string) => {
     const value = code.trim();
-    const result = helpers.barcodeToSku(value);
     setTestBarcode(value);
+
+    const remoteBarcode = await findBarcode(value);
+    if (remoteBarcode) {
+      const skuList = await getSkus();
+      const matchedSku = skuList.find((sku) => sku.id === remoteBarcode.sku_id);
+      if (matchedSku) {
+        setTestResult(`${remoteBarcode.barcode_type === 'carton' ? 'Carton barcode' : 'Sleeve barcode'} matched: ${matchedSku.skuCode} · ${matchedSku.displayName}`);
+        return;
+      }
+      setTestResult(`Barcode matched in Supabase (${remoteBarcode.barcode_type}) but SKU details were not found in current view.`);
+      return;
+    }
+
+    const result = helpers.barcodeToSku(value);
     if (result.sku) {
-      setTestResult(`${result.unitLevel === 'carton' ? 'Carton barcode' : 'Sleeve barcode'} matched: ${result.sku.skuCode} · ${result.sku.displayName}`);
+      setTestResult(`${result.unitLevel === 'carton' ? 'Carton barcode' : 'Sleeve barcode'} matched (mock): ${result.sku.skuCode} · ${result.sku.displayName}`);
       return;
     }
     const pkg = state.packages.find((p) => p.barcodeValue === value || p.packageCode === value);
