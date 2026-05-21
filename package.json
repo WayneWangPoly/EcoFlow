@@ -23,7 +23,8 @@
     "react-router-dom": "^7.10.1",
     "@supabase/supabase-js": "^2.49.8",
     "@zxing/browser": "^0.1.5",
-    "qrcode.react": "^4.2.0"
+    "qrcode.react": "^4.2.0",
+    "@zxing/library": "^0.21.3"
   },
   "devDependencies": {
     "@types/react": "latest",
