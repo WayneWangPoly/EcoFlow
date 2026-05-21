@@ -4,6 +4,7 @@ import { CheckCircle2, ScanLine, TriangleAlert } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, LongPressButton, MobileActionBar, Pill, ProgressBar } from '../../components/ui';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
+import { scanSortingBarcode } from '../../services/pilotSupabaseService';
 
 export default function SortingPage() {
   const { waveId } = useParams();
@@ -99,16 +100,17 @@ export default function SortingPage() {
     const completesTask = lineWillResolve(line.id, applied);
 
     setBusy(true);
-    window.setTimeout(() => {
-      dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code });
-      setFeedback({ tone: 'green', message: result.unitLevel === 'carton' && line.unit === 'sleeve'
-        ? `Carton accepted: ${result.sku!.displayName}. Added ${applied} sleeves. Remaining after scan: ${Math.max(0, remaining - applied)}.`
-        : `Accepted: ${result.sku!.displayName}. Added 1 ${line.unit}. Remaining after scan: ${Math.max(0, remaining - applied)}.` });
-      setActiveLineId(line.id);
-      setBarcode('');
-      setBusy(false);
-      if (completesTask) advanceIfDone(task.id);
-    }, 220);
+    scanSortingBarcode(task.orderId, code)
+      .then(() => {
+        dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code });
+        setFeedback({ tone: 'green', message: result.unitLevel === 'carton' && line.unit === 'sleeve'
+          ? `Carton accepted: ${result.sku!.displayName}. Added ${applied} sleeves. Remaining after scan: ${Math.max(0, remaining - applied)}.`
+          : `Accepted: ${result.sku!.displayName}. Added 1 ${line.unit}. Remaining after scan: ${Math.max(0, remaining - applied)}.` });
+        setActiveLineId(line.id);
+        setBarcode('');
+        if (completesTask) advanceIfDone(task.id);
+      })
+      .finally(() => setBusy(false));
   };
 
   const applyBenchCount = () => {
@@ -208,7 +210,13 @@ export default function SortingPage() {
         <div className="text-xs font-black uppercase tracking-[0.25em] text-eco-muted">Scan carton / sleeve barcode</div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input className="scan-input text-eco-ink" placeholder="Scan SKU barcode or use camera" value={barcode} onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') scan(); }} autoFocus />
-          <BarcodeCameraScanner label="Camera scan" onDetected={(code) => { setBarcode(code); window.setTimeout(() => dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code }), 0); setFeedback({ tone: 'green', message: `Camera detected barcode ${code}. The system has applied it if it matches this order.` }); }} />
+          <BarcodeCameraScanner label="Camera scan" onDetected={(code) => {
+            setBarcode(code);
+            scanSortingBarcode(task.orderId, code).finally(() => {
+              window.setTimeout(() => dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code }), 0);
+              setFeedback({ tone: 'green', message: `Camera detected barcode ${code}. The system has applied it if it matches this order.` });
+            });
+          }} />
           <Button size="lg" variant="dark" loading={busy} onClick={scan}>{busy ? 'Processing' : 'Apply scan'}</Button>
         </div>
         <div className="mt-2 text-xs font-bold text-eco-muted">Real examples seeded: 19344062036170 carton, 9344062033639 sleeve, 07579531135548 carton, 07579531136521 sleeve.</div>
