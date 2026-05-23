@@ -9,6 +9,7 @@ type BarcodeLookup = {
 };
 
 const MOCK_ORDERS_KEY = 'ecoflow_mock_orders';
+const POD_PHOTOS_BUCKET = 'pod-photos';
 
 function getMockOrders(): Order[] {
   const raw = localStorage.getItem(MOCK_ORDERS_KEY);
@@ -22,6 +23,10 @@ function getMockOrders(): Order[] {
 
 function setMockOrders(orders: Order[]) {
   localStorage.setItem(MOCK_ORDERS_KEY, JSON.stringify(orders));
+}
+
+function sanitizeFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, '-');
 }
 
 export async function getSkus(): Promise<SKU[]> {
@@ -94,19 +99,87 @@ export async function createPackages(orderId: string, packageCount: number) {
 
 export async function scanDeliveryPackage(packageCode: string) {
   if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const, packageCode };
-  const { error } = await supabaseClient.from('packages').update({ status: 'delivered' }).eq('package_code', packageCode);
+  const { error } = await supabaseClient.from('packages').update({ status: 'delivered', updated_at: new Date().toISOString() }).eq('package_code', packageCode);
   return { ok: !error, source: 'supabase' as const, error };
 }
 
-export async function createPodRecord(input?: { deliveryStopId?: string; recipientName?: string; notes?: string }) {
+export async function uploadPodPhoto(deliveryStopId: string, file: File) {
+  if (!hasSupabaseEnv || !supabaseClient) {
+    return { ok: true, source: 'mock' as const, url: file.name, path: file.name };
+  }
+
+  const extension = file.name.split('.').pop() || 'jpg';
+  const path = `pod/${deliveryStopId}/${Date.now()}-${sanitizeFileName(file.name || `photo.${extension}`)}`;
+  const { error } = await supabaseClient.storage.from(POD_PHOTOS_BUCKET).upload(path, file, {
+    contentType: file.type || 'image/jpeg',
+    upsert: false
+  });
+
+  if (error) {
+    return { ok: false, source: 'supabase' as const, url: file.name, path, error };
+  }
+
+  const { data } = supabaseClient.storage.from(POD_PHOTOS_BUCKET).getPublicUrl(path);
+  return { ok: true, source: 'supabase' as const, url: data.publicUrl, path };
+}
+
+export async function createPodRecord(input?: { deliveryStopId?: string; recipientName?: string; notes?: string; photoUrl?: string; signatureUrl?: string }) {
   if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const, record: input ?? {} };
   if (!input?.deliveryStopId) return { ok: false, source: 'supabase' as const, error: 'deliveryStopId is required' };
 
   const { data, error } = await supabaseClient
     .from('pod_records')
-    .insert({ delivery_stop_id: input.deliveryStopId, recipient_name: input.recipientName, notes: input.notes })
+    .insert({
+      delivery_stop_id: input.deliveryStopId,
+      recipient_name: input.recipientName,
+      notes: input.notes,
+      photo_image_url: input.photoUrl,
+      signature_image_url: input.signatureUrl
+    })
     .select('*')
     .single();
 
   return { ok: !error, source: 'supabase' as const, record: data, error };
+}
+
+export async function completeDeliveryStopIfReady(deliveryStopId: string, orderId?: string) {
+  if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const };
+
+  const { data: podRecords, error: podError } = await supabaseClient
+    .from('pod_records')
+    .select('id')
+    .eq('delivery_stop_id', deliveryStopId)
+    .limit(1);
+
+  if (podError) return { ok: false, source: 'supabase' as const, error: podError };
+  const hasPod = Boolean(podRecords?.length);
+
+  let allPackagesDelivered = true;
+  if (orderId) {
+    const { data: packages, error: packageError } = await supabaseClient
+      .from('packages')
+      .select('id,status')
+      .eq('order_id', orderId);
+
+    if (packageError) return { ok: false, source: 'supabase' as const, error: packageError };
+    allPackagesDelivered = Boolean(packages?.length) && packages.every((pkg) => pkg.status === 'delivered');
+  }
+
+  if (!hasPod || !allPackagesDelivered) {
+    return { ok: false, source: 'supabase' as const, reason: 'pod_or_packages_pending' as const, hasPod, allPackagesDelivered };
+  }
+
+  const deliveredAt = new Date().toISOString();
+  const { error: stopError } = await supabaseClient
+    .from('delivery_stops')
+    .update({ status: 'delivered', updated_at: deliveredAt })
+    .eq('id', deliveryStopId);
+
+  if (stopError) return { ok: false, source: 'supabase' as const, error: stopError };
+
+  if (orderId) {
+    await supabaseClient.from('orders').update({ status: 'delivered', delivered_at: deliveredAt, updated_at: deliveredAt }).eq('id', orderId);
+  }
+
+  return { ok: true, source: 'supabase' as const, deliveredAt };
 }
