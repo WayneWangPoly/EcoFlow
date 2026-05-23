@@ -29,7 +29,7 @@ export default function WavePlanningPage() {
         eyebrow="Cart wave control"
         title="4-slot cart wave / single pick"
         subtitle="Released orders are visible to both warehouse staff and driver helpers. The moment an order is added to a cart wave or single pick, it is locked out of the released pool so two people cannot pick the same order."
-        right={<Pill tone={released.length ? 'amber' : 'green'}>{released.length} released</Pill>}
+        right={<div className='flex items-center gap-2'><Pill tone={released.length ? 'amber' : 'green'}>{released.length} released</Pill><Button size='sm' variant='secondary' onClick={async () => { const snap = await loadPilotSnapshotFromSupabase(); if (snap.source === 'supabase') dispatch({ type: 'HYDRATE_SUPABASE_PILOT_STATE', payload: { orders: snap.orders, orderItems: snap.orderItems, skus: snap.skus, locations: snap.locations, deliveryRuns: snap.deliveryRuns, deliveryStops: snap.deliveryStops, customers: snap.customers } }); }}>Refresh from Supabase</Button></div>}
       />
 
       <Card className="mb-4 border-eco-ink bg-eco-ink text-white">

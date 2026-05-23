@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { hasSupabaseEnv } from './lib/supabaseClient';
+import { loadPilotSnapshotFromSupabase } from './services/supabasePilotService';
 import { AppShell } from './app/AppShell';
 import { useOps } from './app/OpsContext';
 import HomePage from './features/HomePage';
@@ -61,6 +63,7 @@ function Guarded({ children }: { children: ReactElement }) {
 }
 
 export default function App() {
+  const location = useLocation();
   const { state, dispatch, helpers } = useOps();
   const [authUserId, setAuthUserId] = useState<string | null>(() => localStorage.getItem(AUTH_KEY));
 
@@ -73,6 +76,25 @@ export default function App() {
     }
   }, [activeAuthUser, state.currentUserId, dispatch]);
 
+
+
+  useEffect(() => {
+    const shouldHydrate = hasSupabaseEnv && ['/integrations/ordermentum', '/warehouse/waves', '/driver/run'].some((p) => location.pathname.startsWith(p));
+    if (!shouldHydrate) return;
+    loadPilotSnapshotFromSupabase().then((snap) => {
+      if (snap.source === 'supabase') {
+        dispatch({ type: 'HYDRATE_SUPABASE_PILOT_STATE', payload: {
+          orders: snap.orders,
+          orderItems: snap.orderItems,
+          skus: snap.skus,
+          locations: snap.locations,
+          deliveryRuns: snap.deliveryRuns,
+          deliveryStops: snap.deliveryStops,
+          customers: snap.customers
+        } });
+      }
+    });
+  }, [location.pathname, dispatch]);
   const login = (username: string, pin: string): LoginResult => {
     const loginName = username.trim().toLowerCase();
     if (!['owner', 'warehouse', 'driver', 'accounts'].includes(loginName)) {
