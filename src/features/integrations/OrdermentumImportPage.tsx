@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { createPendingBarcodeSetup, findBarcode, getSkus, importPilotOrdersToSupabase, logBarcodeTestScan, releaseImportedOrders } from '../../services/pilotSupabaseService';
+import { useMemo, useState } from 'react';
+import { findBarcode, getSkus } from '../../services/pilotSupabaseService';
 import { AlertTriangle, CheckCircle2, PackageSearch, RefreshCcw, Settings, UploadCloud } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useOps } from '../../app/OpsContext';
@@ -43,7 +43,6 @@ export default function OrdermentumImportPage() {
     importPilotOrdersToSupabase(state.orders, state.orderItems.map((i) => ({ orderId: i.orderId, skuId: i.skuId, orderedQuantity: i.orderedQuantity, orderedUnit: i.orderedUnit })));
   }, [state.orders, state.orderItems]);
 
-
   const testScan = async (code: string) => {
     const value = code.trim();
     setTestBarcode(value);
@@ -53,11 +52,7 @@ export default function OrdermentumImportPage() {
       const skuList = await getSkus();
       const matchedSku = skuList.find((sku) => sku.id === remoteBarcode.sku_id);
       if (matchedSku) {
-        const unitLevel = remoteBarcode.barcode_type === 'carton' ? 'carton' : 'sleeve';
-        const quantityInBaseUnit = unitLevel === 'carton' ? (matchedSku.sleevesPerCarton ?? 1) : 1;
-        const location = assignedBySku.get(matchedSku.id) ?? 'unassigned';
-        await logBarcodeTestScan(value, true);
-        setTestResult(`Matched SKU ${matchedSku.skuCode} · ${matchedSku.displayName} · unit ${unitLevel} · qty(base) ${quantityInBaseUnit} · location ${location}`);
+        setTestResult(`${remoteBarcode.barcode_type === 'carton' ? 'Carton barcode' : 'Sleeve barcode'} matched: ${matchedSku.skuCode} · ${matchedSku.displayName}`);
         return;
       }
       setTestResult(`Barcode matched in Supabase (${remoteBarcode.barcode_type}) but SKU details were not found in current view.`);
@@ -66,9 +61,7 @@ export default function OrdermentumImportPage() {
 
     const result = helpers.barcodeToSku(value);
     if (result.sku) {
-      const location = assignedBySku.get(result.sku.id) ?? 'unassigned';
-      await logBarcodeTestScan(value, true);
-      setTestResult(`Matched SKU ${result.sku.skuCode} · ${result.sku.displayName} · unit ${result.unitLevel} · qty(base) ${result.quantityInBaseUnit || 1} · location ${location} (mock)`);
+      setTestResult(`${result.unitLevel === 'carton' ? 'Carton barcode' : 'Sleeve barcode'} matched (mock): ${result.sku.skuCode} · ${result.sku.displayName}`);
       return;
     }
     const pkg = state.packages.find((p) => p.barcodeValue === value || p.packageCode === value);

@@ -4,7 +4,7 @@ import { CheckCircle2, ScanLine, TriangleAlert } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, LongPressButton, MobileActionBar, Pill, ProgressBar } from '../../components/ui';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
-import { applySortingScan, getOrderItemsForSorting, scanSortingBarcode } from '../../services/pilotSupabaseService';
+import { scanSortingBarcode } from '../../services/pilotSupabaseService';
 
 export default function SortingPage() {
   const { waveId } = useParams();
@@ -110,8 +110,7 @@ export default function SortingPage() {
 
     setBusy(true);
     scanSortingBarcode(task.orderId, code)
-      .then(async () => {
-        await applySortingScan({ orderId: task.orderId, skuId: line.skuId, barcodeValue: code, unitLevel: result.unitLevel === 'carton' ? 'carton' : 'sleeve', quantityInBaseUnit });
+      .then(() => {
         dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code });
         setFeedback({ tone: 'green', message: result.unitLevel === 'carton' && line.unit === 'sleeve'
           ? `Carton accepted: ${result.sku!.displayName}. Added ${applied} sleeves. Remaining after scan: ${Math.max(0, remaining - applied)}.`

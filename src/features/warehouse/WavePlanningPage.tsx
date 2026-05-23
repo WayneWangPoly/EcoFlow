@@ -4,7 +4,6 @@ import { Boxes, ShoppingBasket, Truck } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, Pill, ProgressBar } from '../../components/ui';
 import { createCartWave } from '../../services/pilotSupabaseService';
-import { loadPilotSnapshotFromSupabase } from '../../services/supabasePilotService';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D'];
 
