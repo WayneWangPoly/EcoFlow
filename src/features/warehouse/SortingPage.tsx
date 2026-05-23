@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, ScanLine, TriangleAlert } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, LongPressButton, MobileActionBar, Pill, ProgressBar } from '../../components/ui';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
+import { applySortingScan, getOrderItemsForSorting, scanSortingBarcode } from '../../services/pilotSupabaseService';
 
 export default function SortingPage() {
   const { waveId } = useParams();
@@ -21,6 +22,7 @@ export default function SortingPage() {
   const [benchOpen, setBenchOpen] = useState(false);
   const [activeLineId, setActiveLineId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [remoteOrderItemsCount, setRemoteOrderItemsCount] = useState<number | null>(null);
 
   const lines = useMemo(() => task ? state.sortingLines.filter((l) => l.sortingTaskId === task.id) : [], [task, state.sortingLines]);
   const order = task ? state.orders.find((o) => o.id === task.orderId) : undefined;
@@ -33,6 +35,12 @@ export default function SortingPage() {
   const allResolved = lines.length > 0 && resolvedLines === totalLines;
   const hasShort = lines.some((l) => (l.shortQuantity ?? 0) > 0);
   const activeLine = lines.find((l) => l.id === activeLineId) ?? lines.find((l) => l.sortedQuantity + (l.shortQuantity ?? 0) < l.requiredQuantity) ?? lines[0];
+
+
+  useEffect(() => {
+    if (!task) return;
+    getOrderItemsForSorting(task.orderId).then((res) => setRemoteOrderItemsCount((res.orderItems as any[]).length));
+  }, [task?.orderId]);
 
   if (!wave) return <EmptyState title="No wave yet" body="Create a cart wave or single pick first, then finish picking before sorting at the van-front bench." action={<Link to="/warehouse/waves"><Button>Create wave</Button></Link>} />;
   if (!task) return <EmptyState title="No sorting tasks" body="This wave has no customer orders to sort." action={<Link to="/warehouse/waves"><Button>Back to waves</Button></Link>} />;
@@ -96,19 +104,22 @@ export default function SortingPage() {
     }
 
     const applied = result.unitLevel === 'carton' && line.unit === 'sleeve' ? cartonQty : 1;
+    const quantityInBaseUnit = result.unitLevel === 'carton' ? cartonQty : 1;
     const completesTask = lineWillResolve(line.id, applied);
 
     setBusy(true);
-    window.setTimeout(() => {
-      dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code });
-      setFeedback({ tone: 'green', message: result.unitLevel === 'carton' && line.unit === 'sleeve'
-        ? `Carton accepted: ${result.sku!.displayName}. Added ${applied} sleeves. Remaining after scan: ${Math.max(0, remaining - applied)}.`
-        : `Accepted: ${result.sku!.displayName}. Added 1 ${line.unit}. Remaining after scan: ${Math.max(0, remaining - applied)}.` });
-      setActiveLineId(line.id);
-      setBarcode('');
-      setBusy(false);
-      if (completesTask) advanceIfDone(task.id);
-    }, 220);
+    scanSortingBarcode(task.orderId, code)
+      .then(async () => {
+        await applySortingScan({ orderId: task.orderId, skuId: line.skuId, barcodeValue: code, unitLevel: result.unitLevel === 'carton' ? 'carton' : 'sleeve', quantityInBaseUnit });
+        dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code });
+        setFeedback({ tone: 'green', message: result.unitLevel === 'carton' && line.unit === 'sleeve'
+          ? `Carton accepted: ${result.sku!.displayName}. Added ${applied} sleeves. Remaining after scan: ${Math.max(0, remaining - applied)}.`
+          : `Accepted: ${result.sku!.displayName}. Added 1 ${line.unit}. Remaining after scan: ${Math.max(0, remaining - applied)}.` });
+        setActiveLineId(line.id);
+        setBarcode('');
+        if (completesTask) advanceIfDone(task.id);
+      })
+      .finally(() => setBusy(false));
   };
 
   const applyBenchCount = () => {
@@ -206,9 +217,16 @@ export default function SortingPage() {
 
       <Card className="mb-4 border-2 border-eco-ink">
         <div className="text-xs font-black uppercase tracking-[0.25em] text-eco-muted">Scan carton / sleeve barcode</div>
+        {remoteOrderItemsCount !== null && <div className="mt-1 text-xs font-bold text-eco-muted">Supabase order_items rows for this order: {remoteOrderItemsCount}</div>}
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input className="scan-input text-eco-ink" placeholder="Scan SKU barcode or use camera" value={barcode} onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') scan(); }} autoFocus />
-          <BarcodeCameraScanner label="Camera scan" onDetected={(code) => { setBarcode(code); window.setTimeout(() => dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code }), 0); setFeedback({ tone: 'green', message: `Camera detected barcode ${code}. The system has applied it if it matches this order.` }); }} />
+          <BarcodeCameraScanner label="Camera scan" onDetected={(code) => {
+            setBarcode(code);
+            scanSortingBarcode(task.orderId, code).finally(() => {
+              window.setTimeout(() => dispatch({ type: 'SCAN_SORTING_ITEM', sortingTaskId: task.id, barcodeValue: code }), 0);
+              setFeedback({ tone: 'green', message: `Camera detected barcode ${code}. The system has applied it if it matches this order.` });
+            });
+          }} />
           <Button size="lg" variant="dark" loading={busy} onClick={scan}>{busy ? 'Processing' : 'Apply scan'}</Button>
         </div>
         <div className="mt-2 text-xs font-bold text-eco-muted">Real examples seeded: 19344062036170 carton, 9344062033639 sleeve, 07579531135548 carton, 07579531136521 sleeve.</div>
