@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Boxes, ShoppingBasket, Truck } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, Pill, ProgressBar } from '../../components/ui';
+import { createCartWave } from '../../services/pilotSupabaseService';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D'];
 
@@ -88,7 +89,7 @@ export default function WavePlanningPage() {
             <Button
               size="lg"
               disabled={cartCandidates.length === 0}
-              onClick={() => dispatch({ type: 'CREATE_CART_WAVE', orderIds: cartCandidates.map((o) => o.id), runId, deliveryWindow: window })}
+              onClick={async () => { const res = await createCartWave(cartCandidates.map((o) => o.id)); if (res.ok) dispatch({ type: 'CREATE_CART_WAVE', orderIds: cartCandidates.map((o) => o.id), runId, deliveryWindow: window }); }}
             >
               Create 4-slot cart wave
             </Button>
