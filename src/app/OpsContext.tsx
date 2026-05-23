@@ -58,7 +58,8 @@ type Action =
   | { type: 'UPDATE_LOCATION_ASSIGNMENT'; locationId: string; skuId: string | null; status?: 'active' | 'empty' | 'blocked' | 'inactive' }
   | { type: 'UPDATE_DRIVER_RUN_MASTER'; runId: string; driverName: string; vehicleRego: string }
   | { type: 'REPRINT_LABEL'; packageId: string; reason: string }
-  | { type: 'VOID_LABEL'; packageId: string; reason: string };
+  | { type: 'VOID_LABEL'; packageId: string; reason: string }
+  | { type: 'HYDRATE_SUPABASE_PILOT_STATE'; payload: Partial<OpsState> };
 
 type OpsContextValue = {
   state: OpsState;
@@ -261,6 +262,14 @@ function reducer(state: OpsState, action: Action): OpsState {
     case 'RESET_DEMO':
       return initialState;
 
+
+    case 'HYDRATE_SUPABASE_PILOT_STATE': {
+      return {
+        ...state,
+        ...action.payload,
+        customers: action.payload.customers && action.payload.customers.length ? action.payload.customers : state.customers
+      };
+    }
     case 'SET_CURRENT_USER': {
       const user = state.users.find((u) => u.id === action.userId && u.isActive);
       if (!user) return state;
