@@ -20,7 +20,8 @@ export default function WavePlanningPage() {
     return true;
   }), [state.orders, state.customers, suburbFilter, helpers]);
 
-  const cartCandidates = released.filter((order) => helpers.pickRecommendation(order.id).mode === 'cart_wave').slice(0, 4);
+  const recommendedCartCandidates = released.filter((order) => helpers.pickRecommendation(order.id).mode === 'cart_wave');
+  const cartCandidates = (recommendedCartCandidates.length ? recommendedCartCandidates : released).slice(0, 4);
   const singleCandidates = released.filter((order) => helpers.pickRecommendation(order.id).mode === 'single_pick');
 
   return (

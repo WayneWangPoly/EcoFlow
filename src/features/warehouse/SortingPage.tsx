@@ -44,6 +44,7 @@ export default function SortingPage() {
 
   if (!wave) return <EmptyState title="No wave yet" body="Create a cart wave or single pick first, then finish picking before sorting at the van-front bench." action={<Link to="/warehouse/waves"><Button>Create wave</Button></Link>} />;
   if (!task) return <EmptyState title="No sorting tasks" body="This wave has no customer orders to sort." action={<Link to="/warehouse/waves"><Button>Back to waves</Button></Link>} />;
+  if (lines.length === 0) return <EmptyState title="No sorting lines" body="No order lines are available for this wave yet. Refresh from Supabase or return to wave planning." action={<Link to="/warehouse/waves"><Button>Back to waves</Button></Link>} />;
 
   const advanceIfDone = (completedTaskId: string) => {
     const currentIndex = tasks.findIndex((t) => t.id === completedTaskId);
@@ -201,7 +202,7 @@ export default function SortingPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1">
             <div className="text-sm font-black uppercase tracking-wide text-eco-muted">Customer slot / order</div>
-            <select className="mt-2 w-full rounded-xl border border-eco-line bg-white px-4 py-3 font-bold" value={task.id} onChange={(e) => { setSelectedTaskId(e.target.value); setFeedback(null); setBarcode(''); setActiveLineId(''); setBenchOpen(false); }}>
+            <select className="mt-2 w-full rounded-xl border border-eco-line bg-white px-4 py-3 font-bold" value={task?.id ?? ''} onChange={(e) => { setSelectedTaskId(e.target.value); setFeedback(null); setBarcode(''); setActiveLineId(''); setBenchOpen(false); }}>
               {tasks.map((t) => {
                 const o = state.orders.find((ord) => ord.id === t.orderId);
                 const c = helpers.customer(t.customerId);
