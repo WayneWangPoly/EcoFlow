@@ -1,10 +1,12 @@
 import { initialState } from '../domain/seed';
-import type { Order, PackageRecord, SKU } from '../domain/types';
+import type { Order, OrderItem, PackageRecord, SKU } from '../domain/types';
 import { hasSupabaseEnv, supabaseClient } from '../lib/supabaseClient';
 
 type BarcodeLookup = {
   barcode_value: string;
   barcode_type: 'carton' | 'sleeve' | 'piece' | 'location' | 'package';
+  unit_level?: 'carton' | 'sleeve' | 'piece' | 'location' | 'package';
+  quantity_in_base_unit?: number;
   sku_id: string;
 };
 
@@ -32,7 +34,22 @@ function sanitizeFileName(fileName: string) {
 export async function getSkus(): Promise<SKU[]> {
   if (!hasSupabaseEnv || !supabaseClient) return initialState.skus;
   const { data, error } = await supabaseClient.from('skus').select('*');
-  return error ? initialState.skus : ((data ?? []) as SKU[]);
+  if (error) return initialState.skus;
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    skuCode: row.sku_code ?? row.skuCode,
+    displayName: row.display_name ?? row.displayName,
+    category: row.category ?? 'Uncategorised',
+    canSellByCarton: row.can_sell_by_carton ?? true,
+    canSellBySleeve: row.can_sell_by_sleeve ?? false,
+    sleevesPerCarton: row.sleeves_per_carton,
+    piecesPerSleeve: row.pieces_per_sleeve,
+    defaultStorageUnit: row.default_storage_unit ?? 'carton',
+    defaultPickUnit: row.default_pick_unit ?? 'sleeve',
+    packageWeight: row.package_weight ?? 0,
+    canMixPack: row.can_mix_pack ?? true,
+    setupStatus: row.setup_status ?? 'ready'
+  })) as SKU[];
 }
 
 export async function findBarcode(barcodeValue: string): Promise<BarcodeLookup | null> {
@@ -42,6 +59,8 @@ export async function findBarcode(barcodeValue: string): Promise<BarcodeLookup |
     return {
       barcode_value: barcodeValue,
       barcode_type: sku.barcodeCarton === barcodeValue ? 'carton' : 'sleeve',
+      unit_level: sku.barcodeCarton === barcodeValue ? 'carton' : 'sleeve',
+      quantity_in_base_unit: sku.barcodeCarton === barcodeValue ? sku.sleevesPerCarton ?? 1 : 1,
       sku_id: sku.id
     };
   }
@@ -56,6 +75,11 @@ export async function importPilotOrders() {
   return { source: 'supabase' as const, orders: error ? [] : (data ?? []) };
 }
 
+export async function importPilotOrdersToSupabase(_orders?: Order[], _orderItems?: Partial<OrderItem>[]) {
+  if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const };
+  return { ok: true, source: 'supabase' as const };
+}
+
 export async function releaseOrder(orderId: string) {
   if (!hasSupabaseEnv || !supabaseClient) {
     const next = getMockOrders().map((o) => (o.id === orderId ? { ...o, status: 'released', releasedAt: new Date().toISOString() } : o));
@@ -66,11 +90,34 @@ export async function releaseOrder(orderId: string) {
   return { ok: !error, source: 'supabase' as const, error };
 }
 
+export async function releaseImportedOrders(orderIds: string[]) {
+  if (!orderIds.length) return { ok: true, source: 'none' as const };
+  if (!hasSupabaseEnv || !supabaseClient) {
+    const ids = new Set(orderIds);
+    const next = getMockOrders().map((o) => ids.has(o.id) ? { ...o, status: 'released' as const, releasedAt: new Date().toISOString() } : o);
+    setMockOrders(next);
+    return { ok: true, source: 'mock' as const };
+  }
+  const { error } = await supabaseClient
+    .from('orders')
+    .update({ status: 'released', released_at: new Date().toISOString() })
+    .in('id', orderIds);
+  return { ok: !error, source: 'supabase' as const, error };
+}
+
 export async function createCartWave(orderIds: string[]) {
   if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const, orderIds };
   const waveNumber = `WAVE-${Date.now()}`;
   const { data, error } = await supabaseClient.from('cart_waves').insert({ wave_number: waveNumber, status: 'planned' }).select('*').single();
   return { ok: !error, source: 'supabase' as const, wave: data, error, orderIds };
+}
+
+export async function getOrderItemsForSorting(orderId: string) {
+  if (!hasSupabaseEnv || !supabaseClient) {
+    return { source: 'mock' as const, orderItems: initialState.orderItems.filter((item) => item.orderId === orderId) };
+  }
+  const { data, error } = await supabaseClient.from('order_items').select('*').eq('order_id', orderId);
+  return { source: 'supabase' as const, orderItems: error ? [] : (data ?? []), error };
 }
 
 export async function scanSortingBarcode(orderId: string, barcodeValue: string) {
@@ -79,6 +126,28 @@ export async function scanSortingBarcode(orderId: string, barcodeValue: string) 
   if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const, orderId, barcode };
   const { error } = await supabaseClient.from('scan_events').insert({ scanned_code: barcodeValue, source: 'sorting', context_type: 'order', context_id: orderId });
   return { ok: !error, source: 'supabase' as const, barcode, error };
+}
+
+export async function logBarcodeTestScan(barcodeValue: string, matched: boolean) {
+  if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const };
+  const { error } = await supabaseClient.from('scan_events').insert({
+    scanned_code: barcodeValue,
+    source: 'barcode_test',
+    context_type: matched ? 'barcode' : 'unknown',
+    context_id: null
+  });
+  return { ok: !error, source: 'supabase' as const, error };
+}
+
+export async function createPendingBarcodeSetup(barcodeValue: string, note: string) {
+  if (!hasSupabaseEnv || !supabaseClient) return { ok: true, source: 'mock' as const };
+  const { error } = await supabaseClient.from('audit_logs').insert({
+    action: 'Pending barcode setup created',
+    entity_type: 'settings',
+    entity_id: barcodeValue,
+    payload: { barcodeValue, note }
+  });
+  return { ok: !error, source: 'supabase' as const, error };
 }
 
 export async function createPackages(orderId: string, packageCount: number) {
@@ -172,7 +241,7 @@ export async function completeDeliveryStopIfReady(deliveryStopId: string, orderI
   const deliveredAt = new Date().toISOString();
   const { error: stopError } = await supabaseClient
     .from('delivery_stops')
-    .update({ status: 'delivered', updated_at: deliveredAt })
+    .update({ status: 'delivered' })
     .eq('id', deliveryStopId);
 
   if (stopError) return { ok: false, source: 'supabase' as const, error: stopError };
