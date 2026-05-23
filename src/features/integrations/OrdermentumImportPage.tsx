@@ -14,6 +14,7 @@ export default function OrdermentumImportPage() {
   const { state, dispatch, helpers } = useOps();
   const [testBarcode, setTestBarcode] = useState('');
   const [testResult, setTestResult] = useState<string>('');
+  const [pendingNote, setPendingNote] = useState('Need to map this barcode to an EcoFlow SKU.');
   const imported = state.orders.filter((o) => o.status === 'imported');
   const released = state.orders.filter((o) => o.status === 'released');
   const syncTimes = state.orders.map((o) => o.importedAt).sort();
@@ -38,6 +39,9 @@ export default function OrdermentumImportPage() {
   const sampleCustomer = sampleOrder ? state.customers.find((c) => c.id === sampleOrder.customerId) : undefined;
   const sampleItems = sampleOrder ? state.orderItems.filter((i) => i.orderId === sampleOrder.id).slice(0, 5) : [];
 
+  useEffect(() => {
+    importPilotOrdersToSupabase(state.orders, state.orderItems.map((i) => ({ orderId: i.orderId, skuId: i.skuId, orderedQuantity: i.orderedQuantity, orderedUnit: i.orderedUnit })));
+  }, [state.orders, state.orderItems]);
 
   const testScan = async (code: string) => {
     const value = code.trim();
@@ -65,6 +69,7 @@ export default function OrdermentumImportPage() {
       setTestResult(`Package label matched: ${pkg.labelText} for order ${pkg.orderId}`);
       return;
     }
+    await logBarcodeTestScan(value, false);
     setTestResult(`Unknown barcode: ${value}`);
   };
 
@@ -94,7 +99,7 @@ export default function OrdermentumImportPage() {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:min-w-[220px]">
-            <Button disabled={!imported.length} onClick={() => dispatch({ type: 'RELEASE_ALL_IMPORTED' })}>Release all imported orders</Button>
+            <Button disabled={!imported.length} onClick={async () => { await releaseImportedOrders(imported.map((o) => o.id)); dispatch({ type: 'RELEASE_ALL_IMPORTED' }); }}>Release all imported orders</Button>
             <Link to="/owner/orders"><Button variant="secondary" className="w-full">Review orders one by one</Button></Link>
           </div>
         </div>
@@ -156,6 +161,10 @@ export default function OrdermentumImportPage() {
               <Button variant="dark" onClick={() => testScan(testBarcode)}>Check barcode</Button>
             </div>
             {testResult && <div className="mt-3 rounded-2xl border border-blue-200 bg-white p-4 text-sm font-black text-eco-ink">{testResult}</div>}
+            {testResult.startsWith('Unknown barcode') && <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input className="rounded-xl border border-eco-line px-3 py-2 text-sm" value={pendingNote} onChange={(e) => setPendingNote(e.target.value)} />
+              <Button variant="secondary" onClick={async () => { await createPendingBarcodeSetup(testBarcode, pendingNote); setTestResult(`Unknown barcode: ${testBarcode} · pending setup recorded.`); }}>Create pending setup</Button>
+            </div>}
           </div>
           <div className="rounded-2xl bg-white p-4 text-xs font-bold text-eco-muted">
             Try examples:<br />19344062036170 carton<br />9344062033639 sleeve<br />07579531135548 carton<br />07579531136521 sleeve<br />0757953137849 carton<br />0757953137870 sleeve
