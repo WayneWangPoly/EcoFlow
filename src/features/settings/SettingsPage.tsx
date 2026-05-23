@@ -1,10 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Save, Search, UserCheck, MapPinned, RefreshCcw } from 'lucide-react';
+import { Save, Search, UserCheck, MapPinned, RefreshCcw, Database } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, Pill, SectionTitle } from '../../components/ui';
 import type { OpsState, SKU } from '../../domain/types';
+import { hasSupabaseEnv, supabaseClient } from '../../lib/supabaseClient';
 
+
+
+type SupabaseHealth = {
+  mode: 'mock' | 'supabase';
+  skusCount: number;
+  barcodesCount: number;
+  ordersCount: number;
+  auditLogsCount: number;
+  skuReadOk: boolean;
+  barcodeReadOk: boolean;
+  checkedAt?: string;
+  error?: string;
+};
 type DispatchLike = ReturnType<typeof useOps>['dispatch'];
 type Helpers = ReturnType<typeof useOps>['helpers'];
 type SkuDraft = { sleevesPerCarton: string; barcodeCarton: string; barcodeSleeve: string; packageWeight: string };
@@ -144,6 +158,58 @@ export default function SettingsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [skuSort, setSkuSort] = useState<'code' | 'name' | 'category' | 'location' | 'status'>('code');
   const [setupFilter, setSetupFilter] = useState<'all' | 'ready' | 'needs_setup'>('all');
+  const [supabaseHealth, setSupabaseHealth] = useState<SupabaseHealth>({
+    mode: hasSupabaseEnv ? 'supabase' : 'mock',
+    skusCount: 0,
+    barcodesCount: 0,
+    ordersCount: 0,
+    auditLogsCount: 0,
+    skuReadOk: false,
+    barcodeReadOk: false
+  });
+  const [healthBusy, setHealthBusy] = useState(false);
+
+  const runSupabaseHealthCheck = async () => {
+    if (!hasSupabaseEnv || !supabaseClient) {
+      setSupabaseHealth({
+        mode: 'mock',
+        skusCount: 0,
+        barcodesCount: 0,
+        ordersCount: 0,
+        auditLogsCount: 0,
+        skuReadOk: false,
+        barcodeReadOk: false,
+        checkedAt: new Date().toISOString()
+      });
+      return;
+    }
+
+    setHealthBusy(true);
+    const [skus, barcodes, orders, auditLogs] = await Promise.all([
+      supabaseClient.from('skus').select('id', { count: 'exact', head: false }).limit(1),
+      supabaseClient.from('barcodes').select('id', { count: 'exact', head: false }).limit(1),
+      supabaseClient.from('orders').select('id', { count: 'exact', head: false }).limit(1),
+      supabaseClient.from('audit_logs').select('id', { count: 'exact', head: false }).limit(1)
+    ]);
+
+    setSupabaseHealth({
+      mode: 'supabase',
+      skusCount: skus.count ?? 0,
+      barcodesCount: barcodes.count ?? 0,
+      ordersCount: orders.count ?? 0,
+      auditLogsCount: auditLogs.count ?? 0,
+      skuReadOk: !skus.error,
+      barcodeReadOk: !barcodes.error,
+      checkedAt: new Date().toISOString(),
+      error: skus.error?.message || barcodes.error?.message || orders.error?.message || auditLogs.error?.message
+    });
+    setHealthBusy(false);
+  };
+
+  useEffect(() => {
+    runSupabaseHealthCheck();
+  }, []);
+
 
   const skuDraft = (skuId: string) => {
     const sku = state.skus.find((s) => s.id === skuId)!;
@@ -190,6 +256,26 @@ export default function SettingsPage() {
             ['maps', 'Map / navigation'],
             ['rules', 'Packing rules']
           ].map(([key, label]) => <button key={key} onClick={() => setTab(key as typeof tab)} className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === key ? 'bg-eco-ink text-white' : 'bg-eco-fog text-eco-muted'}`}>{label}</button>)}
+        </div>
+      </Card>
+
+
+      <Card className="mb-5 border-blue-200 bg-blue-50">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-xs font-black uppercase tracking-wide text-blue-900">Supabase health check</div>
+            <div className="mt-1 flex items-center gap-2 text-sm font-bold text-blue-950"><Database size={16} /> {hasSupabaseEnv ? 'Supabase env configured' : 'Mock mode'}</div>
+            <div className="mt-2 text-xs font-semibold text-blue-900">SKU read: {supabaseHealth.skuReadOk ? 'ok' : 'not tested / failed'} · Barcode read: {supabaseHealth.barcodeReadOk ? 'ok' : 'not tested / failed'}</div>
+            {supabaseHealth.checkedAt && <div className="mt-1 text-xs font-semibold text-blue-800">Last checked: {new Date(supabaseHealth.checkedAt).toLocaleString()}</div>}
+            {supabaseHealth.error && <div className="mt-1 text-xs font-bold text-red-800">Error: {supabaseHealth.error}</div>}
+          </div>
+          <Button variant="secondary" loading={healthBusy} onClick={runSupabaseHealthCheck}><RefreshCcw size={16} /> Recheck</Button>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          <div className="rounded-xl bg-white p-3 text-sm font-black text-eco-ink">SKUs: {supabaseHealth.skusCount}</div>
+          <div className="rounded-xl bg-white p-3 text-sm font-black text-eco-ink">barcodes: {supabaseHealth.barcodesCount}</div>
+          <div className="rounded-xl bg-white p-3 text-sm font-black text-eco-ink">orders: {supabaseHealth.ordersCount}</div>
+          <div className="rounded-xl bg-white p-3 text-sm font-black text-eco-ink">audit_logs: {supabaseHealth.auditLogsCount}</div>
         </div>
       </Card>
 

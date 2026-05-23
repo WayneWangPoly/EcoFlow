@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Boxes, ShoppingBasket, Truck } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, Pill, ProgressBar } from '../../components/ui';
+import { createCartWave } from '../../services/pilotSupabaseService';
+import { loadPilotSnapshotFromSupabase } from '../../services/supabasePilotService';
 
 const SLOT_LABELS = ['A', 'B', 'C', 'D'];
 
@@ -19,7 +21,8 @@ export default function WavePlanningPage() {
     return true;
   }), [state.orders, state.customers, suburbFilter, helpers]);
 
-  const cartCandidates = released.filter((order) => helpers.pickRecommendation(order.id).mode === 'cart_wave').slice(0, 4);
+  const recommendedCartCandidates = released.filter((order) => helpers.pickRecommendation(order.id).mode === 'cart_wave');
+  const cartCandidates = (recommendedCartCandidates.length ? recommendedCartCandidates : released).slice(0, 4);
   const singleCandidates = released.filter((order) => helpers.pickRecommendation(order.id).mode === 'single_pick');
 
   return (
@@ -28,7 +31,7 @@ export default function WavePlanningPage() {
         eyebrow="Cart wave control"
         title="4-slot cart wave / single pick"
         subtitle="Released orders are visible to both warehouse staff and driver helpers. The moment an order is added to a cart wave or single pick, it is locked out of the released pool so two people cannot pick the same order."
-        right={<Pill tone={released.length ? 'amber' : 'green'}>{released.length} released</Pill>}
+        right={<div className='flex items-center gap-2'><Pill tone={released.length ? 'amber' : 'green'}>{released.length} released</Pill><Button size='sm' variant='secondary' onClick={async () => { const snap = await loadPilotSnapshotFromSupabase(); if (snap.source === 'supabase') dispatch({ type: 'HYDRATE_SUPABASE_PILOT_STATE', payload: { orders: snap.orders, orderItems: snap.orderItems, skus: snap.skus, locations: snap.locations, deliveryRuns: snap.deliveryRuns, deliveryStops: snap.deliveryStops, customers: snap.customers } }); }}>Refresh from Supabase</Button></div>}
       />
 
       <Card className="mb-4 border-eco-ink bg-eco-ink text-white">
@@ -88,7 +91,7 @@ export default function WavePlanningPage() {
             <Button
               size="lg"
               disabled={cartCandidates.length === 0}
-              onClick={() => dispatch({ type: 'CREATE_CART_WAVE', orderIds: cartCandidates.map((o) => o.id), runId, deliveryWindow: window })}
+              onClick={async () => { const res = await createCartWave(cartCandidates.map((o) => o.id)); if (res.ok) dispatch({ type: 'CREATE_CART_WAVE', orderIds: cartCandidates.map((o) => o.id), runId, deliveryWindow: window }); }}
             >
               Create 4-slot cart wave
             </Button>

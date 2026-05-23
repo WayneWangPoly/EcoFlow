@@ -4,6 +4,7 @@ import { Camera, CheckCircle2, PackageCheck, TriangleAlert } from 'lucide-react'
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, LongPressButton, MobileActionBar, Pill, ProgressBar } from '../../components/ui';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
+import { completeDeliveryStopIfReady, createPodRecord, scanDeliveryPackage, uploadPodPhoto } from '../../services/pilotSupabaseService';
 
 function packageLabel(pkg: { packageIndex: number; totalPackages: number }) {
   return `Package ${pkg.packageIndex} of ${pkg.totalPackages}`;
@@ -52,6 +53,7 @@ export default function DeliveryScanPage() {
       } else {
         setFeedback({ tone: 'green', message: `Scanned ${packageLabel(pkg)}.` });
       }
+      scanDeliveryPackage(code);
       dispatch({ type: 'SCAN_DELIVERY_PACKAGE', stopId: selected.id, barcodeValue: code });
       setBarcode('');
       setBusy(false);
@@ -69,18 +71,25 @@ export default function DeliveryScanPage() {
     }, 320);
   };
 
-  const confirmPod = () => {
+  const confirmPod = async () => {
     if (busy) return;
     if (!podReady) {
       setFeedback({ tone: 'amber', message: podMethod === 'photo' ? 'Take a delivery photo before completing this stop.' : 'Complete the selected POD field before finishing delivery.' });
       return;
     }
     setBusy(true);
-    window.setTimeout(() => {
-      dispatch({ type: 'CONFIRM_POD', stopId: selected.id, method: podMethod, signatureName, photoName, note: podNote });
-      setFeedback({ tone: 'green', message: 'Proof of delivery recorded. Stop completed.' });
-      setBusy(false);
-    }, 420);
+    let photoUrl = photoName;
+    const input = document.getElementById('pod-camera-input') as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (podMethod === 'photo' && file) {
+      const uploaded = await uploadPodPhoto(selected.id, file);
+      photoUrl = uploaded.url;
+    }
+    await createPodRecord({ deliveryStopId: selected.id, recipientName: signatureName || customer?.name, notes: podNote });
+    dispatch({ type: 'CONFIRM_POD', stopId: selected.id, method: podMethod, signatureName, photoName: photoUrl, note: podNote });
+    const completion = await completeDeliveryStopIfReady(selected.id, selected.orderId);
+    setFeedback({ tone: completion.ok ? 'green' : 'amber', message: completion.ok ? 'Proof of delivery recorded. Stop completed.' : 'POD saved. Stop stays pending until all packages are scanned and POD exists.' });
+    setBusy(false);
   };
 
   return (
@@ -108,7 +117,7 @@ export default function DeliveryScanPage() {
         <h2 className="text-lg font-black">Scan delivery labels</h2>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input className="scan-input" placeholder="Scan thermal label barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') scan(); }} autoFocus />
-          <BarcodeCameraScanner label="Camera scan" onDetected={(code) => { setBarcode(code); window.setTimeout(() => dispatch({ type: 'SCAN_DELIVERY_PACKAGE', stopId: selected.id, barcodeValue: code }), 0); setFeedback({ tone: 'green', message: `Camera detected package barcode ${code}.` }); }} />
+          <BarcodeCameraScanner label="Camera scan" onDetected={(code) => { setBarcode(code); scanDeliveryPackage(code).finally(() => window.setTimeout(() => dispatch({ type: 'SCAN_DELIVERY_PACKAGE', stopId: selected.id, barcodeValue: code }), 0)); setFeedback({ tone: 'green', message: `Camera detected package barcode ${code}.` }); }} />
           <Button size="lg" loading={busy} onClick={scan}>Scan package</Button>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-3">

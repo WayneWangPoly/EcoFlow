@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PackageCheck, Printer } from 'lucide-react';
 import { useOps } from '../../app/OpsContext';
 import { Button, Card, EmptyState, FieldHeader, MobileActionBar, Pill, ProgressBar } from '../../components/ui';
+import { createPackages } from '../../services/pilotSupabaseService';
 
 function clampPackageCount(value: number) {
   if (Number.isNaN(value)) return 1;
@@ -19,6 +20,7 @@ export default function PackingPage() {
   const [totalPackages, setTotalPackages] = useState(() => clampPackageCount(suggestion));
   const [manualText, setManualText] = useState(String(clampPackageCount(suggestion)));
   const [invoiceAttached, setInvoiceAttached] = useState(true);
+  const [syncMsg, setSyncMsg] = useState('');
 
   useEffect(() => {
     const next = clampPackageCount(suggestion);
@@ -149,6 +151,8 @@ export default function PackingPage() {
                 <div className="mt-4"><ProgressBar value={invoiceAttached ? 1 : 0} total={1} /></div>
               </Card>
 
+              {syncMsg && <Card className="mb-4 border-blue-200 bg-blue-50"><div className="text-sm font-black text-blue-900">{syncMsg}</div></Card>}
+
               {packages.length > 0 && (
                 <Card className="mb-4 border-green-200 bg-green-50">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -162,13 +166,17 @@ export default function PackingPage() {
               )}
 
               <MobileActionBar>
-                <Button className="w-full" size="xl" disabled={!isReady || !invoiceAttached} onClick={() => dispatch({ type: 'GENERATE_PACKAGES', orderId: selectedOrder.id, totalPackages })}>
+                <Button className="w-full" size="xl" disabled={!isReady || !invoiceAttached} onClick={async () => {
+                  await createPackages(selectedOrder.id, totalPackages, selectedOrder.orderNumber);
+                  dispatch({ type: 'GENERATE_PACKAGES', orderId: selectedOrder.id, totalPackages });
+                  setSyncMsg('Package labels synced to Supabase (or mock fallback).');
+                }}>
                   Generate {totalPackages} label{totalPackages > 1 ? 's' : ''}
                 </Button>
               </MobileActionBar>
 
               <div className="mt-5 hidden gap-2 lg:flex lg:justify-end">
-                <Button size="lg" disabled={!isReady || !invoiceAttached} onClick={() => dispatch({ type: 'GENERATE_PACKAGES', orderId: selectedOrder.id, totalPackages })}>Generate thermal labels</Button>
+                <Button size="lg" disabled={!isReady || !invoiceAttached} onClick={async () => { await createPackages(selectedOrder.id, totalPackages, selectedOrder.orderNumber); dispatch({ type: 'GENERATE_PACKAGES', orderId: selectedOrder.id, totalPackages }); setSyncMsg('Package labels synced to Supabase (or mock fallback).'); }}>Generate thermal labels</Button>
                 <Link to={`/warehouse/labels/${selectedOrder.id}`}><Button size="lg" variant="secondary" disabled={packages.length === 0}>Preview labels</Button></Link>
               </div>
             </>
